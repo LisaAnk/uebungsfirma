@@ -1,1 +1,296 @@
-# uebungsfirma
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KI-Übungsfirma (Mail/Brief) – Demo</title>
+  <style>
+    body { font-family: Inter, Roboto, Arial, sans-serif; background:#f6f7fb; color:#111; padding:18px; }
+    .wrap { max-width:980px; margin:0 auto; }
+    header { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; }
+    h1 { font-size:20px; margin:0; }
+    .panel { background:#fff; border-radius:10px; box-shadow:0 6px 18px rgba(8,10,30,0.06); padding:14px; margin-bottom:12px; }
+    button { border-radius:10px; padding:8px 12px; border:1px solid #d6d9e6; background:#fff; cursor:pointer; }
+    textarea { width:100%; min-height:160px; border-radius:8px; padding:10px; border:1px solid #e2e6f0; resize:vertical; font-family:inherit; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+    .meta { color:#666; font-size:13px; }
+    pre { white-space:pre-wrap; word-break:break-word; }
+    .feedback { background:#f8fafc; padding:10px; border-radius:8px; margin-top:8px; font-size:14px; }
+    .snippet { background:#f1f5f9; border-radius:8px; padding:6px 8px; cursor:pointer; border:1px dashed #e2e8f0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>KI-Übungsfirma — Mail/Brief-Simulation</h1>
+      <div class="meta">Single-File Demo — läuft in Static Sandbox</div>
+    </header>
+
+    <div class="panel" id="inboxPanel">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <strong>Aktuelle Kundenanfrage</strong>
+        <div class="meta" id="typeLabel"></div>
+      </div>
+      <div style="margin-top:10px">
+        <div><strong id="subjectField">—</strong></div>
+        <pre id="bodyField" style="margin-top:8px">Keine Anfrage. Klick auf „Neue Anfrage“.</pre>
+      </div>
+
+      <div class="row" style="margin-top:12px">
+        <button id="btnNew">🔁 Neue Anfrage</button>
+        <button id="btnSample">💡 Musterlösung einfügen</button>
+        <button id="btnSimulate">🤖 KI-Kundschaft reagiert</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <strong>Antwort verfassen</strong>
+        <div class="meta">Tipp: benutze die Textbausteine</div>
+      </div>
+
+      <div style="margin-top:10px">
+        <textarea id="replyInput" placeholder="Betreff: ...&#10;&#10;Sehr geehrte/r ...&#10;&#10;Vielen Dank für Ihre Anfrage ..."></textarea>
+
+        <div class="row" style="margin-top:8px">
+          <div class="snippet" data-insert="Betreff: Ihre Anfrage">+ Betreff</div>
+          <div class="snippet" data-insert="Sehr geehrte Damen und Herren,&#10;&#10;">+ Anrede (formell)</div>
+          <div class="snippet" data-insert="Vielen Dank für Ihre Anfrage. Gerne unterbreiten wir Ihnen folgendes Angebot:&#10;Preis: 12,90 € pro Stück (zzgl. Versand).&#10;Lieferzeit: 3-4 Werktage.&#10;&#10;">+ Angebotskern</div>
+          <div class="snippet" data-insert="Es tut uns leid, dass es zu Problemen kam. Wir bieten Ersatzlieferung oder Gutschrift an.&#10;&#10;">+ Kulanz (Rekl.)</div>
+          <div class="snippet" data-insert="Mit freundlichen Grüßen&#10;Musterhandel GmbH">+ Gruß</div>
+        </div>
+
+        <div class="row" style="margin-top:12px">
+          <button id="btnSend">📤 Senden (Antwort einreichen)</button>
+          <button id="btnCheck">✅ Prüfen & Feedback</button>
+          <button id="btnClear">🧹 Leeren</button>
+        </div>
+
+        <div id="feedbackArea" class="feedback" style="display:none"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <strong>Protokoll</strong>
+      <div id="log" style="margin-top:10px; font-size:13px; color:#333"></div>
+    </div>
+
+    <footer style="text-align:center; color:#666; margin-top:6px; font-size:13px">
+      Wenn du willst, mache ich dir die Version als HTML-Datei fertig zum Download oder packe sie in ein GitHub-Repo.
+    </footer>
+  </div>
+
+  <script>
+    // --- Daten & Generator ---
+    const TYPES = [
+      { id: 'preisanfrage', name: 'Preisanfrage', template: (p) => `Sehr geehrte Damen und Herren,\n\nwir benötigen ein Angebot für ${p.menge}× ${p.prod} (${p.einheit}). Bitte teilen Sie Lieferzeit, Versandkosten und Staffeln mit.\n\nMit freundlichen Grüßen\n${p.firma}` },
+      { id: 'reklamation', name: 'Reklamation', template: (p) => `Sehr geehrte Damen und Herren,\n\nbei der Lieferung ${p.bestell} sind ca. ${p.defekt}% der Positionen beschädigt. Bitte um Ersatzlieferung oder Gutschrift.\n\nMit freundlichen Grüßen\n${p.firma}` },
+      { id: 'rueckfrage', name: 'Rückfrage', template: (p) => `Sehr geehrte Damen und Herren,\n\nzu Ihrem Angebot vom ${p.date} haben wir Rückfragen: Gilt der Preis inkl. Versand? Gibt es eine Mindestmenge?\n\nMit freundlichen Grüßen\n${p.firma}` },
+      { id: 'mahnung', name: 'Mahnung', template: (p) => `Sehr geehrte Damen und Herren,\n\nwir konnten zu Rechnung ${p.rechnung} noch keinen Zahlungseingang feststellen. Bitte überweisen Sie binnen 7 Tagen.\n\nMit freundlichen Grüßen\n${p.firma}` }
+    ];
+
+    const PRODUCTS = [
+      { prod: "Kopierpapier A4 80g/m²", einheit: "Karton à 5x500 Blatt" },
+      { prod: "Aktenordner DIN A4 8cm", einheit: "Stück" },
+      { prod: "USB-Stick 64GB", einheit: "Stück" },
+      { prod: "Versandkarton 400x300x200mm", einheit: "Stück" }
+    ];
+    const FIRMS = ["NovaPrint GmbH", "CityOffice AG", "Paper&Co KG", "LogiPack GmbH"];
+
+    function rand(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+    function rndInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+    function today(){ return new Date().toLocaleDateString('de-DE'); }
+
+    // --- State ---
+    let current = null; // {id,type,subject,body,...}
+    const logEl = document.getElementById('log');
+    const subjectEl = document.getElementById('subjectField');
+    const bodyEl = document.getElementById('bodyField');
+    const typeLabel = document.getElementById('typeLabel');
+    const replyInput = document.getElementById('replyInput');
+    const feedbackArea = document.getElementById('feedbackArea');
+
+    // --- UI Aktionen ---
+    document.getElementById('btnNew').addEventListener('click', () => {
+      createNewRequest();
+    });
+    document.getElementById('btnSample').addEventListener('click', () => {
+      if(!current) return alert('Zuerst eine Anfrage erzeugen.');
+      replyInput.value = buildSample(current);
+    });
+    document.getElementById('btnSimulate').addEventListener('click', () => {
+      simulateCustomerReply();
+    });
+    document.getElementById('btnSend').addEventListener('click', () => {
+      submitReply();
+    });
+    document.getElementById('btnCheck').addEventListener('click', () => {
+      runEvaluation();
+    });
+    document.getElementById('btnClear').addEventListener('click', ()=> replyInput.value='');
+
+    document.querySelectorAll('.snippet').forEach(el=>{
+      el.addEventListener('click', ()=> {
+        const ins = el.getAttribute('data-insert');
+        insertAtCursor(replyInput, ins);
+        replyInput.focus();
+      });
+    });
+
+    // --- Funktionen ---
+    function createNewRequest(){
+      const p = rand(PRODUCTS);
+      const f = rand(FIRMS);
+      const typ = rand(TYPES);
+      const data = {
+        id: 'r' + Date.now(),
+        type: typ.id,
+        typeName: typ.name,
+        prod: p.prod,
+        einheit: p.einheit,
+        menge: rndInt(5,400),
+        firma: f,
+        bestell: Math.random().toString(36).slice(2,7).toUpperCase(),
+        defekt: rndInt(2,12),
+        date: today(),
+        rechnung: Math.random().toString(36).slice(2,6).toUpperCase()
+      };
+      const subject = (typ.name === 'Preisanfrage' || typ.name === 'Rückfrage' || typ.name === 'Mahnung') ?
+                      `${typ.name} – ${p.prod}` : `${typ.name}`;
+      const body = typ.template(data);
+      current = { ...data, subject, body };
+      renderCurrent();
+      appendLog(`Neue Anfrage (${current.typeName}): ${current.subject}`);
+      saveCurrent();
+      feedbackArea.style.display='none';
+    }
+
+    function renderCurrent(){
+      if(!current){ subjectEl.textContent='—'; bodyEl.textContent='Keine Anfrage.'; typeLabel.textContent=''; return; }
+      subjectEl.textContent = current.subject;
+      bodyEl.textContent = current.body;
+      typeLabel.textContent = current.typeName;
+    }
+
+    function submitReply(){
+      if(!current) return alert('Erzeuge zuerst eine Anfrage.');
+      const text = replyInput.value.trim();
+      if(!text) return alert('Bitte erst eine Antwort schreiben.');
+      appendLog(`Antwort gesendet (Länge ${text.length}):\n${text}`);
+      // Speichern (einfach)
+      localStorage.setItem('ki_uebungsfirma_last', JSON.stringify({ request: current, reply: text, time: Date.now() }));
+      replyInput.value='';
+      feedbackArea.style.display='none';
+      alert('Antwort gespeichert (local).');
+    }
+
+    function runEvaluation(){
+      if(!current) return alert('Erzeuge zuerst eine Anfrage.');
+      const candidate = replyInput.value.trim() || (JSON.parse(localStorage.getItem('ki_uebungsfirma_last')||'null')||{}).reply || '';
+      if(!candidate) return alert('Keine Antwort vorhanden zum Prüfen.');
+      const res = evaluateCandidate(candidate, current);
+      showFeedback(res);
+      appendLog(`Antwort geprüft: ${res.score}/${res.max} Punkte`);
+    }
+
+    function simulateCustomerReply(){
+      if(!current) return alert('Erzeuge zuerst eine Anfrage.');
+      const last = replyInput.value.trim();
+      // einfache Heuristik
+      let replyText = "Vielen Dank für Ihre Rückmeldung. ";
+      if(current.type === 'preisanfrage'){
+        if(/\d+[.,]?\d*\s*€/.test(last) && /Lieferzeit|Werktag|versand/i.test(last)){
+          replyText = "Danke — können Sie bei Abnahme 20% mehr Menge einen Rabatt prüfen?";
+        } else {
+          replyText = "Bitte nennen Sie noch die genaue Lieferzeit und Versandkosten.";
+        }
+      } else if(current.type === 'reklamation'){
+        if(/ersatz|gutschrift|abholung/.test(last.toLowerCase())){
+          replyText = "Danke für die Kulanz. Bitte veranlassen Sie Abholung am Freitag zwischen 9–12 Uhr.";
+        } else {
+          replyText = "Bitte schlagen Sie eine Lösung vor (Ersatzlieferung oder Gutschrift).";
+        }
+      } else if(current.type === 'mahnung'){
+        if(/bis \d+|frist|zahlungsziel/.test(last.toLowerCase())){
+          replyText = "Wir überweisen bis zum genannten Termin. Vielen Dank.";
+        } else {
+          replyText = "Bitte teilen Sie uns eine angemessene Frist mit.";
+        }
+      } else {
+        replyText = "Vielen Dank. Wir melden uns bei Rückfragen.";
+      }
+      appendLog(`KI-Kunde antwortet: ${replyText}`);
+      alert('KI-Kundschaft hat reagiert (Protokoll).');
+    }
+
+    function evaluateCandidate(text, req){
+      const t = text.toLowerCase();
+      const checklist = [];
+      checklist.push({ id:'anrede', label: 'Anrede vorhanden (Sehr geehrte / Guten Tag / Hallo)', hit: /sehr geehrte|guten tag|hallo/.test(t), weight:1 });
+      checklist.push({ id:'betreff', label: 'Betreff genannt', hit: /^betreff\s*:/i.test(text) || /^betreff\s*:/i.test(text), weight:1 });
+      checklist.push({ id:'bezug', label: 'Bezug zur Anfrage (Produkt/Bestellnummer/Datum)', hit: (req.prod && t.includes(req.prod.toLowerCase().split(' ')[0])) || /bestell|rechnung|lieferung|menge|angebot|anfrage/.test(t), weight:1 });
+      checklist.push({ id:'preis', label: 'Preis oder Konditionen genannt (bei Angebot)', hit: /\d+[.,]?\d*\s*€/.test(t) || /rabatt|skonto|rabatt|preis|staffel/.test(t), weight:2 });
+      checklist.push({ id:'lieferzeit', label: 'Lieferzeit / Versand / Zeitpunkt genannt', hit: /lieferzeit|werktag|versand|tage|lieferung/.test(t), weight:1 });
+      checklist.push({ id:'ton', label: 'Höflicher Ton (Bitte/Danke/Entschuldigung)', hit: /vielen dank|bitte|entschuldigung|wir bedauern/.test(t), weight:1 });
+      checklist.push({ id:'abschluss', label: 'Grußformel + Signatur', hit: /mit freundlichen grüßen|freundliche grüße|mfg/.test(t), weight:1 });
+      checklist.push({ id:'struktur', label: 'Absätze / Struktur', hit: text.includes('\\n\\n') || text.split('\\n').length > 3, weight:1 });
+
+      // Szenario-spezifisch
+      if(req.type === 'reklamation'){
+        checklist.push({ id:'loesung', label: 'Lösungsvorschlag (Ersatz/Gutschrift/Abholung)', hit: /ersatz|gutschrift|abholung|rücksendung/.test(t), weight:2 });
+      }
+      if(req.type === 'mahnung'){
+        checklist.push({ id:'frist', label: 'Konkrete Frist / Zahlungsziel', hit: /frist|bis zum|zahlungsziel|7 tage|14 tage/.test(t), weight:1 });
+      }
+
+      const max = checklist.reduce((a,b)=>a+b.weight,0);
+      const score = checklist.reduce((a,b)=>a + (b.hit? b.weight : 0), 0);
+      const missing = checklist.filter(c=>!c.hit).map(c=>c.label);
+      return { score, max, checklist, missing };
+    }
+
+    function showFeedback(res){
+      feedbackArea.style.display='block';
+      feedbackArea.innerHTML = `<strong>Punkte:</strong> ${res.score} / ${res.max}<br><br>` +
+        `<strong>Checkliste:</strong><ul>${res.checklist.map(c=>`<li>${c.hit? '✅':'◻️'} ${c.label} ${c.weight>1?` (×${c.weight})`:''}</li>`).join('')}</ul>` +
+        (res.missing.length? `<div style="margin-top:8px"><strong>Verbesserungsvorschläge:</strong><ul>${res.missing.map(m=>`<li>${m}</li>`).join('')}</ul></div>` : `<div style="margin-top:8px;color:green">Alles Wichtige vorhanden.</div>`);
+    }
+
+    function buildSample(req){
+      if(req.type === 'preisanfrage'){
+        return `Betreff: Angebot ${req.prod}\n\nSehr geehrte Damen und Herren,\n\nvielen Dank für Ihre Anfrage. Gern unterbreiten wir folgendes Angebot:\nPreis: 12,90 € pro Stück (zzgl. Versand).\nLieferzeit: 3–4 Werktage ab Bestelleingang.\nZahlungsziel: 14 Tage, 2% Skonto bei Zahlung innerhalb 7 Tagen.\n\nMit freundlichen Grüßen\nMusterhandel GmbH`;
+      }
+      if(req.type === 'reklamation'){
+        return `Betreff: Reklamation ${req.bestell}\n\nSehr geehrte Damen und Herren,\n\nvielen Dank für Ihre Nachricht. Wir bedauern die Unannehmlichkeiten. Wir bieten Ersatzlieferung oder eine Gutschrift an. Bitte teilen Sie mit, ob wir die beschädigte Ware abholen sollen.\n\nMit freundlichen Grüßen\nMusterhandel GmbH`;
+      }
+      if(req.type === 'mahnung'){
+        return `Betreff: Mahnung ${req.rechnung}\n\nSehr geehrte Damen und Herren,\n\nvielen Dank für Ihre Nachricht. Wir prüfen den Vorgang und überweisen bis spätestens zum genannten Termin. Sollte es Rückfragen geben, melden wir uns.\n\nMit freundlichen Grüßen\nMusterhandel GmbH`;
+      }
+      return `Betreff: Ihre Anfrage\n\nSehr geehrte Damen und Herren,\n\nvielen Dank für Ihre Nachricht. Wir kümmern uns und melden uns zeitnah.\n\nMit freundlichen Grüßen\nMusterhandel GmbH`;
+    }
+
+    function appendLog(text){
+      const time = new Date().toLocaleTimeString();
+      logEl.innerHTML = `<div style="margin-bottom:8px"><small style="color:#666">${time}</small><div style="margin-top:4px">${text.replace(/\\n/g,'<br>')}</div></div>` + logEl.innerHTML;
+    }
+
+    function insertAtCursor(input, text) {
+      const start = input.selectionStart || 0;
+      const end = input.selectionEnd || 0;
+      const before = input.value.substring(0, start);
+      const after = input.value.substring(end);
+      input.value = before + text + after;
+      const pos = start + text.length;
+      input.selectionStart = input.selectionEnd = pos;
+      input.focus();
+    }
+
+    function saveCurrent(){
+      try { localStorage.setItem('ki_uebungsfirma_last_req', JSON.stringify(current)); } catch(e){/* no-op */ }
+    }
+
+    // Start: erzeugen einer Anfrage
+    createNewRequest();
+  </script>
+</body>
+</html>
